@@ -1,7 +1,8 @@
 import os
 import random
 import logging
-import telebot
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = -1004459815440
@@ -13,10 +14,11 @@ EXISTING_POSTS = [
     120, 119, 118, 117, 116, 1
 ]
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+# فعال‌سازی لاگ
+logging.basicConfig(format="%(asctime)s [%(levelname)s] %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-bot = telebot.TeleBot(TOKEN)
+# حافظهٔ موقت برای پست‌های جدید (تا ری‌استارت بعدی)
 new_posts = []
 
 def get_two_random():
@@ -25,37 +27,44 @@ def get_two_random():
         return []
     return random.sample(all_posts, 2)
 
-@bot.message_handler(commands=['start'])
-def send_random_posts(message):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ids = get_two_random()
     if not ids:
-        bot.reply_to(message, "هنوز دو پست توی کانال ذخیره نشده. 🙁")
+        await update.message.reply_text("هنوز دو پست توی کانال ذخیره نشده. 🙁")
         return
     for msg_id in ids:
         try:
-            bot.forward_message(
-                chat_id=message.chat.id,
-                from_chat_id=CHANNEL_ID,
+            await update.message.forward_from_chat_id(
+                chat_id=CHANNEL_ID,
                 message_id=msg_id
             )
         except Exception as e:
-            logger.error(f"خطا در فوروارد پست {msg_id}: {e}")
-            bot.reply_to(message, f"خطا در ارسال یکی از پست‌ها (ID: {msg_id}).")
+            logger.error(f"خطا در فوروارد {msg_id}: {e}")
+            await update.message.reply_text(f"خطا در ارسال پست {msg_id}.")
 
-@bot.message_handler(commands=['count'])
-def show_count(message):
+async def count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total = len(EXISTING_POSTS) + len(new_posts)
-    bot.reply_to(message, f"📊 تعداد پست‌های فعلی: {total}")
+    await update.message.reply_text(f"📊 تعداد پست‌های ذخیره‌شده: {total}")
 
-@bot.channel_post_handler(func=lambda m: True)
-def handle_new_post(message):
-    new_posts.append(message.message_id)
-    logger.info(f"✅ پست جدید اضافه شد: {message.message_id}")
+async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg_id = update.channel_post.message_id
+    new_posts.append(msg_id)
+    logger.info(f"✅ پست جدید اضافه شد: {msg_id}")
 
-if __name__ == "__main__":
+def main():
     if not TOKEN:
         raise ValueError("BOT_TOKEN تنظیم نشده!")
-    bot.remove_webhook()
+
+    app = Application.builder().token(TOKEN).build()
+
+    # هندلرها
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("count", count))
+    app.add_handler(MessageHandler(filters.ALL, handle_channel_post))
+
     logger.info("🚀 ربات با موفقیت اجرا شد. برای شروع /start را بزنید.")
-    # ❗ تغییر مهم: حذف allowed_updates یا تنظیم آن برای دریافت همه نوع پیام
-    bot.infinity_polling(skip_pending=True)
+    # اجرای polling بدون skip_pending و بدون webhook
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
