@@ -1,33 +1,23 @@
 import os
-import json
 import random
 import telebot
 
 TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = -1004459815440          # آیدی عددی کانال (حتی اگه عمومی باشه فرقی نداره)
-DATA_FILE = "/app/data/posts.json"   # مسیر داخل Railway
+CHANNEL_ID = -1004459815440
+
+# لیست کامل آیدی پست‌ها (همان ۵۱ عددی که فرستادی)
+EXISTING_POSTS = [165, 164, 163, 162, 161, 160, 159, 158, 157, 156, 155, 154, 153, 152, 151, 150, 149, 148, 147, 146, 145, 144, 143, 142, 141, 140, 139, 138, 137, 136, 135, 134, 133, 132, 131, 130, 129, 128, 127, 126, 125, 124, 123, 122, 121, 120, 119, 118, 117, 116, 1]
 
 bot = telebot.TeleBot(TOKEN)
 
-def load_ids():
-    try:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
-
-def add_post(msg_id):
-    ids = load_ids()
-    if msg_id not in ids:
-        ids.append(msg_id)
-        with open(DATA_FILE, "w") as f:
-            json.dump(ids, f)
+# لیست پست‌های جدید (که بعد از اجرا اضافه می‌شوند)
+new_posts = []
 
 def get_two_random():
-    ids = load_ids()
-    if len(ids) < 2:
+    all_posts = EXISTING_POSTS + new_posts
+    if len(all_posts) < 2:
         return []
-    return random.sample(ids, 2)
+    return random.sample(all_posts, 2)
 
 @bot.message_handler(commands=['start'])
 def send_posts(message):
@@ -47,11 +37,11 @@ def send_posts(message):
 
 @bot.channel_post_handler(func=lambda m: True)
 def handle_new_post(message):
-    add_post(message.message_id)
-    print(f"✅ پست جدید ذخیره شد: {message.message_id}")
+    new_posts.append(message.message_id)
+    print(f"✅ پست جدید اضافه شد: {message.message_id}")
 
 if __name__ == "__main__":
     if not TOKEN:
         raise ValueError("BOT_TOKEN تنظیم نشده!")
-    print("🚀 ربات آماده‌ست...")
+    print("🚀 ربات با موفقیت اجرا شد. برای شروع /start را بزنید.")
     bot.infinity_polling(allowed_updates=["channel_post"])
